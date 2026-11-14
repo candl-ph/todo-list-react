@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { projectsSchema, projectKey } from "./projects.ts";
+import type { Project } from "./projects.ts";
 import type { Todo } from "../types/todo";
 
 export const predefinedCategories = ["Work", "Personal", "Shopping"];
@@ -10,7 +12,8 @@ export function priorityLabel(priority?: string) {
 }
 export const categoryValue = (name: string) => `category:${name}`;
 export const decodeCategory = (value: string) => value.startsWith("category:") ? value.slice(9) : undefined;
-export const DATA_KEY = "todo-data-v1";
+export const DATA_KEY = "todo-data-v2";
+const LEGACY_DATA_KEY = "todo-data-v1";
 export const TRASH_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 export const MAX_BACKUP_BYTES = 5 * 1024 * 1024;
 const timestamp = z.number().finite().refine(value => !Number.isNaN(new Date(value).getTime()));
@@ -28,17 +31,17 @@ const categoriesSchema = z.array(z.string().trim().min(1)).transform(items =>
   [...new Set(items)].filter(name => !predefinedCategories.includes(name)));
 const trashSchema = z.array(z.object({ todo: todoSchema, deletedAt: timestamp }));
 export type TrashedTodo = z.infer<typeof trashSchema>[number];
-export type TodoData = { todos: Todo[]; customCategories: string[]; trash: TrashedTodo[] };
-export const emptyTodoData = (): TodoData => ({ todos: [], customCategories: [], trash: [] });
+export type TodoData = { todos: Todo[]; customCategories: string[]; trash: TrashedTodo[]; projects: Project[] };
+export const emptyTodoData = (): TodoData => ({ todos: [], customCategories: [], trash: [], projects: [] });
 type Storage = Pick<globalThis.Storage, "getItem" | "setItem">;
 const dataSchema = z.object({
-  todos: todosSchema, customCategories: categoriesSchema, trash: trashSchema.default([]),
+  todos: todosSchema, customCategories: categoriesSchema, trash: trashSchema.default([]), projects: projectsSchema.default([]),
 }).refine(data => {
   const ids = [...data.todos.map(todo => todo.id), ...data.trash.map(entry => entry.todo.id)];
-  return new Set(ids).size === ids.length;
-}, "Task IDs must be unique across active tasks and Trash.");
+  return new Set(ids).size === ids.length && data.projects.every(project => [...predefinedCategories, ...data.customCategories].includes(project.list));
+}, "Task IDs must be unique and each project must reference an existing list.");
 const storedSchema = z.object({
-  todos: todosSchema, customCategories: categoriesSchema, trash: trashSchema.default([]),
+  todos: todosSchema, customCategories: categoriesSchema, trash: trashSchema.default([]), projects: projectsSchema.default([]),
   revision: z.number().int().nonnegative().safe().default(0),
 }).refine(data => dataSchema.safeParse(data).success);
 
@@ -56,22 +59,26 @@ function read<T>(storage: Storage, key: string, schema: z.ZodType<T, z.ZodTypeDe
 export function loadTodoData(storage: Storage) {
   const warnings: string[] = [];
   const raw = storage.getItem(DATA_KEY);
+  const sourceKey = raw !== null ? DATA_KEY : LEGACY_DATA_KEY;
   let data: TodoData;
   let revision = 0;
-  if (raw !== null) {
-    const stored = read(storage, DATA_KEY, storedSchema, { ...emptyTodoData(), revision: 0 }, warnings);
+  if (raw !== null || storage.getItem(LEGACY_DATA_KEY) !== null) {
+    const stored = read(storage, sourceKey, storedSchema, { ...emptyTodoData(), revision: 0 }, warnings);
     revision = stored.revision;
-    data = { todos: stored.todos, customCategories: stored.customCategories, trash: stored.trash };
+    data = { todos: stored.todos, customCategories: stored.customCategories, trash: stored.trash, projects: stored.projects };
   } else {
     data = {
       todos: read(storage, "todo-list", todosSchema, [], warnings),
       customCategories: read(storage, "todo-categories", categoriesSchema, [], warnings),
-      trash: [],
+      trash: [], projects: [],
     };
   }
   data.customCategories = [...new Set([...data.customCategories, ...data.todos.flatMap(todo =>
     todo.category && !predefinedCategories.includes(todo.category) ? [todo.category] : [])])];
-  return { data, warnings, revision, raw };
+  if (raw === null && sourceKey === LEGACY_DATA_KEY && storage.getItem(LEGACY_DATA_KEY) !== null) {
+    saveTodoData(storage, data, revision, null);
+  }
+  return { data, warnings, revision, raw: storage.getItem(DATA_KEY) };
 }
 export class TodoConflictError extends Error {}
 export function saveTodoData(storage: Storage, data: TodoData, revision = 0, expectedRaw?: string | null) {
@@ -138,12 +145,12 @@ export function restoreTrash(data: TodoData, ids: string[], now = Date.now()): T
   };
 }
 const backupSchema = z.object({
-  format: z.literal("daylight-backup"), version: z.literal(1),
+  format: z.literal("daylight-backup"), version: z.union([z.literal(1), z.literal(2)]),
   exportedAt: z.string().datetime(), data: dataSchema,
 });
 export function createBackup(data: TodoData, now = Date.now()) {
   return JSON.stringify(backupSchema.parse({
-    format: "daylight-backup", version: 1, exportedAt: new Date(now).toISOString(), data: pruneTrash(data, now),
+    format: "daylight-backup", version: 2, exportedAt: new Date(now).toISOString(), data: pruneTrash(data, now),
   }), null, 2);
 }
 export function parseBackup(raw: string, now = Date.now()): TodoData {
@@ -159,15 +166,22 @@ export function mergeGuestTasks(account: TodoData, guest: TodoData, now = Date.n
   const data = mergeBackup(current, guest, now);
   const tasks = data.todos.length - current.todos.length + data.trash.length - current.trash.length;
   const lists = data.customCategories.filter(name => !current.customCategories.includes(name)).length;
-  return { data, tasks, lists };
+  const projects = data.projects.length - (current.projects ?? []).length;
+  return { data, tasks, lists, projects };
 }
 export function mergeBackup(current: TodoData, incoming: TodoData, now = Date.now()): TodoData {
   const existing = new Set([...current.todos.map(todo => todo.id), ...current.trash.map(entry => entry.todo.id)]);
   const todos = incoming.todos.filter(todo => !existing.has(todo.id));
   const trash = incoming.trash.filter(entry => !existing.has(entry.todo.id));
-  const names = [...current.customCategories, ...incoming.customCategories, ...todos.flatMap(todo => todo.category ? [todo.category] : [])];
+  const projects = [...(current.projects ?? [])];
+  for (const project of incoming.projects ?? []) {
+    if (!projects.some(item => item.id === project.id || projectKey(item.list) === projectKey(project.list))) projects.push(project);
+  }
+  const canonicalCategory = (name: string) => projects.find(project => projectKey(project.list) === projectKey(name))?.list ?? name;
+  const canonicalTodo = (todo: Todo) => todo.category ? { ...todo, category: canonicalCategory(todo.category) } : todo;
+  const names = [...current.customCategories, ...incoming.customCategories, ...todos.flatMap(todo => todo.category ? [todo.category] : [])].map(canonicalCategory);
   return pruneTrash({
-    todos: [...current.todos, ...todos], trash: [...current.trash, ...trash],
+    ...current, projects, todos: [...current.todos, ...todos.map(canonicalTodo)], trash: [...current.trash, ...trash.map(entry => ({ ...entry, todo: canonicalTodo(entry.todo) }))],
     customCategories: [...new Set(names)].filter(name => !predefinedCategories.includes(name)),
   }, now);
 }
@@ -345,6 +359,7 @@ export function editTodo(todos: Todo[], id: string, text: string, category?: str
   });
 }
 export function renameCategory(data: TodoData, from: string, to: string, now = Date.now()): TodoData {
+  if ((data.projects ?? []).some(project => projectKey(project.list) === projectKey(from))) throw new Error("Edit the project title instead. Its agent list key stays fixed.");
   const current = from.trim();
   const next = to.trim();
   if (predefinedCategories.includes(current)) throw new Error("That list cannot be renamed.");
@@ -362,6 +377,7 @@ export function renameCategory(data: TodoData, from: string, to: string, now = D
   };
 }
 export function deleteCategory(data: TodoData, category: string): TodoData {
+  if ((data.projects ?? []).some(project => projectKey(project.list) === projectKey(category))) throw new Error("Archive this project instead of deleting its list.");
   if (predefinedCategories.includes(category)) return data;
   return {
     ...data,
@@ -398,7 +414,7 @@ export function matchesWorkspaceAgent(agent: string | undefined, owner = "all") 
   if (owner.startsWith("agent:")) return agent === owner.slice(6);
   return agent === owner;
 }
-const builtinViews = new Set(["day", "all", "upcoming", "trash", "completed", "pending", "settings"]);
+const builtinViews = new Set(["day", "all", "upcoming", "trash", "completed", "pending", "settings", "projects"]);
 export function workspaceView(value: string | null | undefined) {
   const list = value ? decodeCategory(value) : undefined;
   if (value && (builtinViews.has(value) || (list && value === categoryValue(list)))) return value;

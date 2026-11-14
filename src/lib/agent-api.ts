@@ -1,3 +1,4 @@
+import { ProjectError } from "./projects";
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { hashApiToken } from "./api-token";
@@ -5,8 +6,8 @@ import { databaseConfigured, findUserIdByTokenHash, updateDocument } from "./db"
 import { AgentTaskError, type TodoData } from "./todo-store";
 
 export function agentFailure(error: unknown) {
-  if (error instanceof AgentTaskError) return NextResponse.json({ error: error.message }, { status: error.status });
-  if (error instanceof ZodError) return NextResponse.json({ error: "This task data is not valid." }, { status: 400 });
+  if (error instanceof AgentTaskError || error instanceof ProjectError) return NextResponse.json({ error: error.message }, { status: error.status });
+  if (error instanceof ZodError) return NextResponse.json({ error: "The supplied data is not valid." }, { status: 400 });
   throw error;
 }
 

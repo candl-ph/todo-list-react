@@ -11,7 +11,7 @@ export const metadata: Metadata = {
     shortcut: assetPath("/favicon.ico"),
     apple: [{ url: assetPath("/todolizt-apple-touch-icon.png"), sizes: "180x180", type: "image/png" }],
   },
-  description: "Organize tasks, categories, and deadlines with a private browser-saved to-do list.",
+  description: "Develop project ideas, keep detailed notes, and organize tasks and deadlines in TodoLizt.",
 };
 
 export default function RootLayout({

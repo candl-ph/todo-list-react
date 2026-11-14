@@ -15,6 +15,7 @@ exportable backups, a 30-day Trash, and protection against conflicting tab edits
 
 ## Features
 
+- **Project planning:** Upgrade a list into a project with an overview, goals, long notes, reference links, lifecycle status, and task progress. Agents can read and edit project context with existing tokens.
 - **Daily focus:** My Day brings together tasks due today and overdue tasks.
 - **Pending tasks:** Put a task on hold with its pause button and resume it with play. Pending tasks have their own view and stay out of My Day and Upcoming. They remain in All Tasks, their lists, backups, and search. Completing a pending task clears the hold.
 - **Task management:** Add, edit, complete, and delete tasks with optional lists, due dates, notes, and priorities.
@@ -40,6 +41,16 @@ selected list when you are browsing a list. My Day excludes undated tasks;
 after today. The address bar keeps the view you selected, so refreshing opens that same page. My Day uses the plain address. Filter by agent to see one owner, or only tasks that no agent has claimed. Deadlines use your browser's local calendar, and undated tasks sort
 last when sorting by due date. Sorting by priority puts high first and leaves tasks with no priority last. Search matches task text and notes in every list, including tasks outside the current view. Clearing the search returns to that view. Trash search stays inside Trash. A note can be up to 2,000 characters, and clearing it removes the note.
 
+## Projects
+
+Open **Projects** to create a project, or open an ordinary list and select **Upgrade list to project**. The project reuses the list's tasks, including their IDs, claims, notes, and deadlines. Ordinary lists remain available.
+
+Each project has a fixed **list key** for agent commands and an editable display title. For example, keep `todo-list-react` as the key and use “TodoLizt” as its title. Edit the overview to set a summary, goals, HTTP/HTTPS reference links, and status: Idea, Planning, Active, On hold, or Completed. Use **Edit notes** for requirements, research, and decisions (up to 100,000 characters). Save commits your changes; Cancel loads the latest saved version. Conflicts keep your draft visible.
+
+Project task search stays inside that project. Other task views retain their search across lists. Progress counts completed tasks out of all project tasks outside Trash. Changing project status does not change task status. Archive a project from its overview to hide it from default project navigation; use **Include archived** in Projects to reopen and restore it. Archiving does not block agents or hide its tasks from ordinary task views. Project list keys cannot be renamed or deleted.
+
+Project details work in browser-only mode. Agents need a signed-in account; signing in merges browser projects into that account. Backups include project details. Import adds missing projects and keeps existing projects when either their ID or list key matches, reporting skipped projects before you merge.
+
 ## Keyboard shortcuts
 
 Press **Alt+N** to focus the new-task field (opens All Tasks when the current view has no composer), then **Enter** to add it. Tab to a task row and press **Ctrl+Enter** (Mac: **⌘+Enter**) to complete or reopen it, or **Ctrl+Backspace** (Mac: **⌘+Backspace**) to move it to Trash. Deleted tasks keep the usual Undo action. Shortcuts ignore typing fields, open dialogs/menus, key repeats, and text composition; task actions require focus on the row itself.
@@ -62,7 +73,7 @@ in browser storage alone is not a backup against clearing that browser's data.
 ### Backups and recovery
 
 Open **Data & backup → Export backup** to download a JSON file containing tasks,
-custom lists, and unexpired Trash. To import, choose a TodoLizt backup, review the
+custom lists, projects, and unexpired Trash. New exports use backup version 2; version 1 imports remain supported. To import, choose a TodoLizt backup, review the
 preview, and select **Merge backup**.
 
 Imports add missing task IDs and lists. Existing tasks, including those in Trash,
@@ -96,9 +107,9 @@ available, while saving is paused.
 <details>
 <summary>Storage format and compatibility</summary>
 
-The current snapshot is stored under `todo-data-v1`, with tasks, custom categories,
-Trash, and a revision number. Older `todo-list` and `todo-categories` entries are
-read when no current snapshot exists; original entries are retained.
+The current snapshot is stored under `todo-data-v2`, with tasks, custom categories,
+projects, Trash, and a revision number. The previous `todo-data-v1` snapshot is migrated once and retained. Reload older open tabs after upgrading; edits made in those tabs stay in their old browser snapshot. Older `todo-list` and `todo-categories` entries are
+read when neither snapshot exists; original entries are retained.
 
 Invalid content is preserved under `<original-key>.recovery.<unique-id>` before it
 can be replaced. Legacy entries and recovery copies are separate from Trash, so
@@ -232,6 +243,54 @@ curl -sS -X POST -H "Authorization: Bearer $TODOLIZT_TOKEN" -H "content-type: ap
 `status` is `open` (the default), `pending`, `done`, or `all`. Open excludes tasks on hold. Update a task with `"status": "pending"` to put it on hold or `"status": "open"` to resume it. Add `&agent=cursor` to keep one owner and `&list=billing-app` to keep one project. A blank list name is rejected. Responses are one task, or `{ "tasks": [...] }` for the list. Failures are `{ "error": "..." }` with status 400, 401, 404, or 409.
 
 From another repository, say: "Add a TodoLizt task for this project: ship the invoice export." The agent uses the current folder name as `list` and its own name as `agent`.
+
+### Project API
+
+The same bearer token works for tasks and projects. No new token or permission is required. Discover project context by the existing repository/list key:
+
+```sh
+curl -sS -H "Authorization: Bearer $TODOLIZT_TOKEN" \
+  "$TODOLIZT_URL/api/agent/projects?list=todo-list-react"
+```
+
+`GET /api/agent/projects` returns `{ "projects": [...] }` and includes archived projects by default. Use `includeArchived=false` to hide them. Each project includes its full context, `version`, and `counts: { total, completed }`. `GET /api/agent/projects/<id>` returns one project with counts.
+
+Create a project or upgrade an existing list:
+
+```sh
+curl -sS -X POST -H "Authorization: Bearer $TODOLIZT_TOKEN" \
+  -H "content-type: application/json" \
+  -d '{"list":"todo-list-react","title":"TodoLizt","agent":"codex","goals":"Plan and finish projects"}' \
+  "$TODOLIZT_URL/api/agent/projects"
+```
+
+Update only the fields you need, including the latest project `version`:
+
+```sh
+curl -sS -X PATCH -H "Authorization: Bearer $TODOLIZT_TOKEN" \
+  -H "content-type: application/json" \
+  -d '{"agent":"codex","version":1,"notes":"Requirements and implementation decisions"}' \
+  "$TODOLIZT_URL/api/agent/projects/$PROJECT_ID"
+```
+
+Editable fields are `title` (1–200 characters), `summary` (up to 2,000), `goals` (up to 10,000), `notes` (up to 100,000), `links` (up to 50 `{ label, url }` HTTP/HTTPS entries), `status` (`idea`, `planning`, `active`, `on-hold`, `completed`), and `archived` (boolean). Defaults are empty details, Idea, and unarchived; the title defaults to the list key. Writes require an `agent` name and return one project. Creating an already upgraded list or editing a stale version returns 409. Read the latest context and reconcile your changes before retrying a stale edit. Project edits record `lastEditedBy` and do not claim the project or change task ownership.
+
+Existing task commands continue using `list`, including archived or completed projects. A task created for a new list still creates an ordinary list; upgrading to a project is explicit.
+
+### Project verification
+
+`npm test` covers storage, projects, backup compatibility, and task workflows. An optional HTTP integration suite runs against a disposable local PostgreSQL database named `projects_check` and a locally running app configured to use that database:
+
+```sh
+TODOLIZT_TEST_ORIGIN=http://127.0.0.1:7321 \
+TODOLIZT_TEST_DATABASE_URL="$TEST_DATABASE_URL" \
+TODOLIZT_TEST_AUTH_SECRET="$TEST_AUTH_SECRET" \
+node --test tests/projects-api.test.mjs
+```
+
+The test creates and removes fixture accounts. Never point it at your normal account database.
+
+Run browser checks against the same disposable app with `TODOLIZT_TEST_ORIGIN=http://127.0.0.1:7321 npm run test:browser`. Install Chromium with `npx playwright install chromium`, or use `mcr.microsoft.com/playwright:v1.64.1-noble` with the repository mounted and host networking. The checks cover light/dark themes at mobile and desktop widths. Set `TODOLIZT_TEST_EMAIL` and `TODOLIZT_TEST_PASSWORD` for a disposable fixture account to also check guest project merging and concurrent agent edits. Screenshots default to `/tmp/todolizt-projects-browser`; set `TODOLIZT_TEST_ARTIFACTS` to change that directory.
 
 ## Project structure
 
