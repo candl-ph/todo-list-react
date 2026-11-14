@@ -17,6 +17,8 @@ export function BackupDialog({ store }: { store: TodoStore }) {
   const request = useRef(0);
   const merged = incoming ? mergeBackup(store, incoming) : null;
   const addedTasks = merged ? merged.todos.length - store.todos.length : 0;
+  const addedProjects = merged ? merged.projects.length - store.projects.length : 0;
+  const skippedProjects = incoming ? incoming.projects.length - addedProjects : 0;
   const addedTrash = merged ? merged.trash.length - store.trash.length : 0;
   const download = () => {
     try {
@@ -47,7 +49,7 @@ export function BackupDialog({ store }: { store: TodoStore }) {
     setWorking(true);
     try {
       if (await store.importBackup(incoming)) {
-        toast.success("Backup merged. Existing tasks were kept.");
+        toast.success("Backup merged. Existing tasks and projects were kept.");
         setIncoming(null); setFilename(""); setError("");
       } else setError("Nothing was imported. Resolve the saving warning and retry.");
     } finally { setWorking(false); }
@@ -55,15 +57,15 @@ export function BackupDialog({ store }: { store: TodoStore }) {
   return <div className="space-y-4">
       <section className="space-y-3 rounded-xl border p-4" aria-label="Export backup">
         <h3 className="text-sm font-medium">Take your tasks with you</h3>
-        <p className="text-xs leading-relaxed text-muted-foreground">Backups are readable JSON files. They stay on your device and include tasks in Trash that have not expired.</p>
+        <p className="text-xs leading-relaxed text-muted-foreground">Backups are readable JSON files. They stay on your device and include project details and tasks in Trash that have not expired.</p>
         <Button variant="outline" onClick={download}><Download className="mr-2 h-4 w-4" />Export backup</Button>
       </section>
       <section className="space-y-3 rounded-xl border p-4" aria-label="Import backup">
         <label htmlFor="backup-file" className="block text-sm font-medium">Restore from a TodoLizt backup</label>
-        <p className="text-xs leading-relaxed text-muted-foreground">Import adds missing tasks and lists. Tasks with IDs already in your app, including Trash, stay unchanged. Expired Trash is skipped.</p>
+        <p className="text-xs leading-relaxed text-muted-foreground">Import adds missing tasks, lists, and projects. Existing project IDs or list keys are kept. Tasks with IDs already in your app, including Trash, stay unchanged. Expired Trash is skipped.</p>
         <Input id="backup-file" type="file" accept=".json,application/json" disabled={working || !store.writable} onChange={event => { void chooseFile(event.target.files?.[0]); event.target.value = ""; }} />
         {reading && <p role="status" className="text-xs text-muted-foreground">Checking backup…</p>}
-        {incoming && <div className="space-y-3" role="status"><p className="break-words text-xs text-muted-foreground">{filename}: {addedTasks} new tasks and {addedTrash} Trash items. {incoming.todos.length + incoming.trash.length - addedTasks - addedTrash} existing tasks will be skipped. Missing lists will be added.</p><Button onClick={() => { void importFile(); }} disabled={working || store.busy || !store.writable}><Upload className="mr-2 h-4 w-4" />{working ? "Importing…" : "Merge backup"}</Button></div>}
+        {incoming && <div className="space-y-3" role="status"><p className="break-words text-xs text-muted-foreground">{filename}: {addedTasks} new tasks, {addedTrash} Trash items, and {addedProjects} projects. {skippedProjects} existing projects will be skipped. {incoming.todos.length + incoming.trash.length - addedTasks - addedTrash} existing tasks will be skipped. Missing lists will be added.</p><Button onClick={() => { void importFile(); }} disabled={working || store.busy || !store.writable}><Upload className="mr-2 h-4 w-4" />{working ? "Importing…" : "Merge backup"}</Button></div>}
       </section>
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       <p className="text-xs leading-relaxed text-muted-foreground">Clearing site data also removes Trash and recovery copies in this browser. Downloaded backups are separate.</p>

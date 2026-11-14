@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Pool } from "pg";
 import { emptyTodoData, nextTodoData, parseTodoData, type TodoData } from "./todo-store";
+import { preserveLegacyProjects } from "./projects";
 
 let pool: Pool | undefined;
 let ready: Promise<void> | undefined;
@@ -112,13 +113,13 @@ export async function readDocument(userId: string): Promise<{ data: TodoData; re
   return { data: parseTodoData(row.data), revision: Number(row.revision) };
 }
 
-export async function saveDocument(userId: string, data: TodoData, expectedRevision: number): Promise<{ data: TodoData; revision: number } | null> {
+export async function saveDocument(userId: string, data: TodoData, expectedRevision: number, legacyClient = false): Promise<{ data: TodoData; revision: number } | null> {
   await ensureDatabase();
   const client = await getPool().connect();
   try {
     await client.query("BEGIN");
-    const current = await client.query<{ revision: number }>(
-      "SELECT revision FROM todo_documents WHERE user_id = $1 FOR UPDATE",
+    const current = await client.query<{ revision: number; data: unknown }>(
+      "SELECT revision, data FROM todo_documents WHERE user_id = $1 FOR UPDATE",
       [userId],
     );
     const revision = current.rows[0] ? Number(current.rows[0].revision) : 0;
@@ -126,6 +127,7 @@ export async function saveDocument(userId: string, data: TodoData, expectedRevis
       await client.query("ROLLBACK");
       return null;
     }
+    if (legacyClient && current.rows[0]) data = preserveLegacyProjects(parseTodoData(current.rows[0].data), data);
     const nextRevision = revision + 1;
     if (current.rows[0]) {
       await client.query(

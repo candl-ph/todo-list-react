@@ -220,13 +220,13 @@ test('backup round-trip includes active, completed, custom lists, and Trash', ()
   const data = trashTodos({ ...dataWith([task(), task({ id: 'done', completed: true }), task({ id: 'deleted' })]), customCategories: ['All'] }, ['deleted'], now);
   const backup = createBackup(data, now);
   assert.deepEqual(parseBackup(backup, now), data);
-  assert.equal(JSON.parse(backup).version, 1);
+  assert.equal(JSON.parse(backup).version, 2);
 });
 test('malformed, unsupported, duplicate, and oversized backups are rejected', () => {
   assert.throws(() => parseBackup('invalid', now), /JSON/);
   const good = JSON.parse(createBackup(dataWith([task()]), now));
   for (const invalid of [
-    { ...good, version: 2 },
+    { ...good, version: 99 },
     { ...good, format: 'other-app' },
     { ...good, data: { ...good.data, todos: [task({ completed: 'yes' })] } },
     { ...good, data: { ...good.data, todos: [task(), task()] } },
@@ -273,7 +273,7 @@ test('signing in adds browser tasks that the account does not already have', () 
   const again = mergeGuestTasks(first.data, guest, now);
   assert.equal(again.tasks, 0);
   assert.equal(again.lists, 0);
-  assert.deepEqual(mergeGuestTasks(account, emptyTodoData(), now), { data: account, tasks: 0, lists: 0 });
+  assert.deepEqual(mergeGuestTasks(account, emptyTodoData(), now), { data: account, tasks: 0, lists: 0, projects: 0 });
 });
 test('concurrent tab changes are serialized and preserve distinct additions', async () => {
   const saved = storage();

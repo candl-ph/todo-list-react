@@ -1,3 +1,4 @@
+import { ProjectError } from "@/lib/projects";
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { databaseConfigured, readDocument, saveDocument } from "@/lib/db";
@@ -29,12 +30,13 @@ export async function PUT(request: Request) {
   }
   try {
     const data = parseTodoData(body.data);
-    const saved = await saveDocument(auth.session.userId, data, body.revision);
+    const saved = await saveDocument(auth.session.userId, data, body.revision, typeof body.data === "object" && body.data !== null && !("projects" in body.data));
     if (!saved) {
       return NextResponse.json({ error: "Another session changed your tasks. Please try again." }, { status: 409 });
     }
     return NextResponse.json(saved);
   } catch (error) {
+    if (error instanceof ProjectError) return NextResponse.json({ error: error.message }, { status: error.status });
     if (error instanceof ZodError) {
       return NextResponse.json({ error: "This task data is not valid." }, { status: 400 });
     }

@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { ZodError } from "zod";
 import { toast } from "sonner";
 import {
   assertTaskUnchanged, commitTodoChange, createBackup, DATA_KEY, deleteCategory, renameCategory,
   editTodo, emptyTodoData, loadTodoData, mergeBackup, mergeGuestTasks, nextTodoData, parseTodoData, predefinedCategories, taskPriority,
   pruneTrash, restoreTrash, saveTodoData, trashTodos, TodoConflictError, type TodoData,
 } from "@/lib/todo-store";
+import { createProject, updateProject, ProjectError, type ProjectFields } from "@/lib/projects";
 import type { Todo } from "@/types/todo";
 
 class SessionExpired extends Error {}
@@ -75,10 +77,16 @@ export function useTodos() {
         if (notify) toast.error(message);
         return message;
       }
+      const conflict = error instanceof TodoConflictError || (error instanceof ProjectError && error.status === 409);
+      if (conflict) {
+        // Refresh saved state while editor components retain their independent drafts.
+        try { if (account.current) await pullAccount(false); else openGuest(); } catch { /* Keep the draft and original conflict message if refresh fails. */ }
+      }
       const message = error instanceof TodoConflictError ? error.message :
         error instanceof Error && error.name === "QuotaExceededError" ? "Browser storage is full. Export a backup or free space, then retry. Your change was not saved." :
+        error instanceof ZodError ? error.issues.map(issue => `${issue.path.join(".")}: ${issue.message}`).join(" ") :
         error instanceof Error ? error.message : "Your change could not be saved. Please retry.";
-      if (!(error instanceof TodoConflictError)) setSaveError(message);
+      if (!conflict) setSaveError(message);
       if (notify) toast.error(message);
       return message;
     } finally {
@@ -258,12 +266,12 @@ export function useTodos() {
         setStorageMessage("");
         setSaveError("");
         const preview = mergeGuestTasks(dataRef.current, guest);
-        if (preview.tasks || preview.lists) {
+        if (preview.tasks || preview.lists || preview.projects) {
           const error = await mutate(current => mergeGuestTasks(current, guest).data, false);
           if (error) {
             try { localStorage.setItem(`${DATA_KEY}.guest-recovery`, JSON.stringify(guest)); } catch { /* The account copy remains available. */ }
             toast.error("Signed in, but browser tasks could not be added. A recovery copy was kept in this browser.");
-          } else toast.success(preview.tasks === 1 && !preview.lists ? "1 browser task was added to your account." : preview.tasks > 0 ? `${preview.tasks} browser tasks were added to your account.` : preview.lists === 1 ? "1 browser list was added to your account." : `${preview.lists} browser lists were added to your account.`);
+          } else toast.success(preview.projects ? `${preview.projects} browser projects were added to your account.` : preview.tasks === 1 && !preview.lists ? "1 browser task was added to your account." : preview.tasks > 0 ? `${preview.tasks} browser tasks were added to your account.` : preview.lists === 1 ? "1 browser list was added to your account." : `${preview.lists} browser lists were added to your account.`);
         }
         return "";
       } catch {
@@ -323,6 +331,15 @@ export function useTodos() {
     remove(id: string) { return remove([id]); },
     clearCompleted() { return remove(dataRef.current.todos.filter(todo => todo.completed).map(todo => todo.id)); },
     restore,
+    async createProject(list: string, fields: Partial<ProjectFields>) {
+      const id = crypto.randomUUID();
+      const now = Date.now();
+      const error = await mutate(current => createProject(current, list, fields, "user", id, now), false);
+      return { error, id };
+    },
+    async updateProject(id: string, fields: Partial<ProjectFields>, expectedVersion: number) {
+      return mutate(current => updateProject(current, id, fields, expectedVersion, "user"), false);
+    },
     async addCategory(name: string) {
       return mutate(current => {
         if (!name.trim()) throw new Error("List name cannot be empty.");
