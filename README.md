@@ -166,12 +166,14 @@ production build as a completed lint check.
 
 ## Homelab deployment
 
-The [deploy workflow](.github/workflows/nextjs.yml) runs on the self-hosted runner
-on homelab1. It starts automatically on pushes to **main**, and it can also be
-started manually from the repository's **Actions** tab.
+The [deploy workflow](.github/workflows/nextjs.yml) starts automatically on
+pushes to **main**, and it can also be started manually from the repository's
+**Actions** tab. GitHub's runners compile the Next.js server. The self-hosted
+runner on homelab1 only loads that finished build into Docker and restarts the
+site.
 
-The job builds the Next.js server and serves it from Docker. The container
-publishes host port **7200**. On homelab1 the site is `http://127.0.0.1:7200/`.
+The container publishes host port **7200**. On homelab1 the site is
+`http://127.0.0.1:7200/`.
 Sign-in uses the repository Actions secrets `DATABASE_URL` and `AUTH_SECRET`.
 The deploy passes them into the container. [deploy/env.example](deploy/env.example)
 shows the shape of `DATABASE_URL`. Create an account
@@ -185,9 +187,9 @@ Saving files locally does not update the running site. A deployment happens
 only after the changes reach GitHub and the workflow succeeds.
 
 The homelab image leaves `NEXT_PUBLIC_BASE_PATH` empty and runs the Next.js
-server, which is what sign-in needs. It uses Node.js 20 and does not run
-`npm test` or `npm run typecheck`. Local TypeScript tests require Node.js 22.18
-or newer, as described above.
+server, which is what sign-in needs. The image is built with Node.js 20 and
+does not run `npm test` or `npm run typecheck`. Local TypeScript tests require
+Node.js 22.18 or newer, as described above.
 
 `npm start` serves that same server build locally. Sign-in needs this server,
 so the homelab image does not use a static export.
