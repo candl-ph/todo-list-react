@@ -163,11 +163,11 @@ export function TodoList() {
   );
 
   return (
-    <div className="min-h-screen lg:grid lg:grid-cols-[260px_minmax(0,1fr)]">
-      <aside className={cn("border-b bg-muted/40 lg:sticky lg:top-0 lg:h-screen lg:overflow-y-auto lg:border-b-0 lg:border-r", mobileNav ? "block" : "hidden lg:block")} aria-label="Task navigation">
+    <div className="min-h-screen md:grid md:grid-cols-[208px_minmax(0,1fr)] lg:grid-cols-[260px_minmax(0,1fr)]">
+      <aside className={cn("border-b bg-muted/40 md:sticky md:top-0 md:h-screen md:overflow-y-auto md:border-b-0 md:border-r", mobileNav ? "block" : "hidden md:block")} aria-label="Task navigation">
         <div className="flex items-center justify-between p-6 pb-8">
           <div className="flex items-center gap-3"><Image src={assetPath("/todolizt-logo.png")} alt="" width={36} height={36} className="h-9 w-9 shrink-0 object-contain" /><span className="text-xl font-semibold tracking-tight">TodoLizt<span className="text-primary">.</span></span></div>
-          <Button className="lg:hidden" variant="ghost" size="icon" aria-label="Close navigation" onClick={() => setMobileNav(false)}><X className="h-4 w-4" /></Button>
+          <Button className="md:hidden" variant="ghost" size="icon" aria-label="Close navigation" onClick={() => setMobileNav(false)}><X className="h-4 w-4" /></Button>
         </div>
         <nav className="space-y-1 px-3" aria-label="Views">
           {views.filter(item => item.id !== "settings").map(item => {
@@ -193,7 +193,7 @@ export function TodoList() {
             </DialogContent>
           </Dialog>
         </div>
-        <nav className="max-h-72 space-y-1 overflow-y-auto px-3 pb-4 lg:max-h-none lg:flex-1" aria-label="Lists">{store.categories.filter(name => !store.projects.some(project => project.list === name)).map((name, index) => <button key={name} aria-current={view === categoryValue(name) ? "page" : undefined} onClick={() => navigate(categoryValue(name))} className={cn("flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm hover:bg-accent", view === categoryValue(name) ? "bg-primary/10 font-semibold text-primary" : "text-muted-foreground")}><span className={cn("h-2 w-2 shrink-0 rounded-full", ["bg-sky-400", "bg-amber-400", "bg-violet-400", "bg-emerald-400"][index % 4])} /><span className="min-w-0 truncate">{name}</span><span className="ml-auto text-xs tabular-nums">{store.todos.filter(todo => todo.category === name && !todo.completed).length}</span></button>)}</nav>
+        <nav className="max-h-72 space-y-1 overflow-y-auto px-3 pb-4 md:max-h-none" aria-label="Lists">{store.categories.filter(name => !store.projects.some(project => project.list === name)).map((name, index) => <button key={name} aria-current={view === categoryValue(name) ? "page" : undefined} onClick={() => navigate(categoryValue(name))} className={cn("flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm hover:bg-accent", view === categoryValue(name) ? "bg-primary/10 font-semibold text-primary" : "text-muted-foreground")}><span className={cn("h-2 w-2 shrink-0 rounded-full", ["bg-sky-400", "bg-amber-400", "bg-violet-400", "bg-emerald-400"][index % 4])} /><span className="min-w-0 truncate">{name}</span><span className="ml-auto text-xs tabular-nums">{store.todos.filter(todo => todo.category === name && !todo.completed).length}</span></button>)}</nav>
         {store.projects.some(project => !project.archived) && <nav className="max-h-64 space-y-1 overflow-y-auto px-3 pb-4" aria-label="Projects"><h2 className="px-3 py-2 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Your projects</h2>{store.projects.filter(project => !project.archived).map(project => <button key={project.id} onClick={() => navigate(categoryValue(project.list))} aria-current={view === categoryValue(project.list) ? "page" : undefined} className={cn("flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm hover:bg-accent", view === categoryValue(project.list) && "bg-primary/10 text-primary")}><Folder className="h-4 w-4 shrink-0" /><span className="truncate">{project.title}</span></button>)}</nav>}
         <div className="mt-auto px-3 pb-4 pt-2">
           <div className="overflow-hidden rounded-xl border bg-card/80">
@@ -204,11 +204,11 @@ export function TodoList() {
 
       <main className="min-w-0">
         <header className="flex items-center gap-3 border-b px-4 py-4 sm:px-8">
-          <Button variant="ghost" size="icon" className="lg:hidden" aria-label="Open navigation" aria-expanded={mobileNav} onClick={() => setMobileNav(!mobileNav)}><Menu className="h-5 w-5" /></Button>
+          <Button variant="ghost" size="icon" className="md:hidden" aria-label="Open navigation" aria-expanded={mobileNav} onClick={() => setMobileNav(!mobileNav)}><Menu className="h-5 w-5" /></Button>
           {view !== "settings" && <div className="relative max-w-md flex-1"><Search className="pointer-events-none absolute left-0 top-2.5 h-4 w-4 text-muted-foreground" /><Input aria-label={view === "projects" ? "Search projects" : project ? "Search project tasks" : view === "trash" ? "Search Trash" : "Search every list"} placeholder={view === "projects" ? "Search projects…" : project ? "Search project tasks…" : view === "trash" ? "Search in Trash…" : "Search every list…"} value={search} onChange={event => setSearch(event.target.value)} className="border-0 bg-transparent pl-7 shadow-none focus-visible:ring-1" /></div>}
           <div className="ml-auto flex items-center gap-3"><span className="hidden text-xs text-muted-foreground sm:inline">{store.loaded ? format(now, "EEE, MMM d") : "Your workspace"}</span><ThemeToggle /></div>
         </header>
-        <div className="mx-auto max-w-4xl px-4 py-8 sm:px-10 sm:py-12">
+        <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-12 lg:px-10">
           <div className="mb-8 flex items-start justify-between gap-4"><div><div className="mb-3 flex items-center gap-2 text-xs font-medium uppercase tracking-widest text-primary"><Icon className="h-4 w-4" /> Your workspace</div><h1 className="break-words text-3xl font-semibold tracking-tight sm:text-4xl">{title}</h1><p className="mt-3 max-w-lg text-sm leading-relaxed text-muted-foreground">{project ? "Your idea, details, and next steps." : current?.description ?? "One list. A little less on your mind."}</p></div><div className="hidden h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary sm:flex"><Icon className="h-7 w-7" strokeWidth={1.5} /></div></div>
           {store.storageMessage && <p role="alert" className="mb-5 rounded-lg border border-destructive p-3 text-sm">{store.storageMessage}</p>}
           {!store.loaded ? <p role="status" className="py-12 text-muted-foreground">Opening your tasks…</p> : <>

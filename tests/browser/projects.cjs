@@ -9,18 +9,24 @@ const artifacts = process.env.TODOLIZT_TEST_ARTIFACTS || '/tmp/todolizt-projects
   await mkdir(artifacts, { recursive: true });
   const browser = await chromium.launch({ headless: true });
   try {
-    for (const width of [390, 1280]) for (const theme of ['light', 'dark']) {
+    for (const width of [390, 848, 1280]) for (const theme of ['light', 'dark']) {
       const context = await browser.newContext({ viewport: { width, height: 900 }, acceptDownloads: true });
       const page = await context.newPage();
       const errors = []; page.on('pageerror', error => errors.push(error.message));
       await page.addInitScript(value => localStorage.setItem('theme', value), theme);
       async function navigate(name) {
-        if (width < 1024) await page.getByRole('button', { name: 'Open navigation', exact: true }).click();
+        if (width < 768) await page.getByRole('button', { name: 'Open navigation', exact: true }).click();
         await page.getByRole('navigation', { name: 'Views', exact: true }).getByRole('button', { name: new RegExp(`^${name}`) }).click();
       }
       const key = `browser-project-${width}-${theme}-${Date.now()}`;
       console.log(`CHECK ${theme} ${width}: project workflow`);
       await page.goto(`${origin}/?view=projects`);
+      const sidebar = page.getByRole('complementary', { name: 'Task navigation' });
+      if (width >= 768) {
+        await expect(sidebar).toBeVisible();
+      } else {
+        await expect(sidebar).toBeHidden();
+      }
       await expect(page.getByRole('heading', { name: 'Start a project' })).toBeVisible();
       await page.getByLabel('List key', { exact: true }).fill(key);
       await page.getByLabel('Project title', { exact: true }).fill('Recipe project');
@@ -75,7 +81,7 @@ const artifacts = process.env.TODOLIZT_TEST_ARTIFACTS || '/tmp/todolizt-projects
       await page.getByRole('button', { name: 'Edit overview', exact: true }).click();
       await page.getByLabel('Archived', { exact: true }).uncheck();
       await page.getByRole('button', { name: 'Save overview' }).click();
-      if (width >= 1024) {
+      if (width >= 768) {
         const projectLink = page.getByRole('navigation', { name: 'Projects', exact: true }).getByRole('button', { name: 'Recipe planner', exact: true });
         await projectLink.scrollIntoViewIfNeeded();
         await expect(projectLink).toBeVisible();
