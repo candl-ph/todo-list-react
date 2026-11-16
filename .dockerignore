@@ -8,3 +8,5 @@ out
 *.md
 coverage
 .vercel
+tests
+pnpm-lock.yaml
