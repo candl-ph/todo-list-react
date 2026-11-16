@@ -13,7 +13,7 @@ permissions:
 
 concurrency:
   group: homelab
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   deploy:
@@ -28,12 +28,40 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
+          DOCKER_BUILDKIT: "1"
         run: |
           if [ -z "$DATABASE_URL" ] || [ -z "$AUTH_SECRET" ]; then
             echo "Set repository secrets DATABASE_URL and AUTH_SECRET."
             exit 1
           fi
-          docker compose up -d --build
+
+          if ! docker buildx inspect todolizt-builder >/dev/null 2>&1; then
+            docker buildx create --name todolizt-builder --driver docker-container
+          fi
+
+          cache_dir="${HOME}/.cache/todolizt-buildkit"
+          new_cache="${cache_dir}.next"
+          mkdir -p "$cache_dir"
+          rm -rf "$new_cache"
+
+          cache_from=()
+          if [ -f "${cache_dir}/index.json" ]; then
+            cache_from=(--cache-from "type=local,src=${cache_dir}")
+          fi
+
+          docker buildx build \
+            --builder todolizt-builder \
+            --file Dockerfile \
+            --tag todolizt:latest \
+            --load \
+            "${cache_from[@]}" \
+            --cache-to "type=local,dest=${new_cache},mode=max" \
+            .
+
+          rm -rf "$cache_dir"
+          mv "$new_cache" "$cache_dir"
+
+          docker compose up -d --no-build --force-recreate
 
       - name: Check the site responds
         run: |

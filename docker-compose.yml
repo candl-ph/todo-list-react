@@ -2,6 +2,7 @@ name: todolizt
 
 services:
   web:
+    image: todolizt:latest
     container_name: todolizt
     build: .
     ports:

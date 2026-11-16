@@ -8,6 +8,12 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["pg"],
   ...(staticExport ? { output: "export", trailingSlash: true } : { output: "standalone" }),
   images: { unoptimized: true },
+  typescript: {
+    ignoreBuildErrors: process.env.SKIP_TYPECHECK === "true",
+  },
+  eslint: {
+    ignoreDuringBuilds: process.env.SKIP_TYPECHECK === "true",
+  },
 };
 
 export default nextConfig;
