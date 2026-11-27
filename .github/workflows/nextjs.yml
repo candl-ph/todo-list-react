@@ -1,4 +1,4 @@
-# Validate on GitHub-hosted runners, then build and deploy trusted main code
+# Validate, then build and deploy trusted main code
 # on candl-ph public-builds runners attached to homelab1 at host port 7200.
 
 name: Deploy to homelab

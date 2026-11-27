@@ -11,7 +11,15 @@ permissions:
 jobs:
   check:
     name: Typecheck, test, and browser
-    runs-on: ubuntu-latest
+    runs-on:
+      group: public-builds
+      labels: [self-hosted, Linux, X64, docker, homelab, public-builds]
+    # Browser libraries are preinstalled; each job has its own network/port 7321.
+    container:
+      image: mcr.microsoft.com/playwright:v1.64.1-noble
+    defaults:
+      run:
+        shell: bash
     timeout-minutes: 20
     steps:
       - name: Checkout
@@ -36,14 +44,16 @@ jobs:
         run: npm run build
 
       - name: Install Chromium
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install chromium
 
       - name: Browser project workflow
         env:
           TODOLIZT_TEST_ORIGIN: http://127.0.0.1:7321
           TODOLIZT_TEST_ARTIFACTS: ${{ runner.temp }}/todolizt-projects-browser
         run: |
-          npm start -- -H 127.0.0.1 -p 7321 > "$RUNNER_TEMP/next.log" 2>&1 &
+          node node_modules/next/dist/bin/next start -H 127.0.0.1 -p 7321 > "$RUNNER_TEMP/next.log" 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true; wait "$server_pid" 2>/dev/null || true' EXIT
           ready=0
           for _ in $(seq 1 30); do
             if curl -fsS -o /dev/null "$TODOLIZT_TEST_ORIGIN/"; then
@@ -57,3 +67,7 @@ jobs:
             exit 1
           fi
           npm run test:browser
+
+      - name: Restore workspace ownership for the shared runner
+        if: always()
+        run: chown -R "$(stat -c '%u:%g' "$GITHUB_WORKSPACE")" "$GITHUB_WORKSPACE"
