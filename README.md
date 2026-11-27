@@ -10,8 +10,8 @@ Plan your day, organize tasks into lists, and track deadlines in a responsive
 workspace with light and dark themes. Tasks are saved in your browser, with
 exportable backups, a 30-day Trash, and protection against conflicting tab edits.
 
-[Deployment workflow](https://github.com/christiantiquis/todo-list-react/actions/workflows/nextjs.yml)
-· [Report an issue](https://github.com/christiantiquis/todo-list-react/issues)
+[Deployment workflow](https://github.com/candl-ph/todo-list-react/actions/workflows/nextjs.yml)
+· [Report an issue](https://github.com/candl-ph/todo-list-react/issues)
 
 ## Features
 
@@ -127,7 +127,7 @@ Use **Node.js 22.18 or newer** and npm to run the app and its TypeScript tests.
 No environment variables, database credentials, or API keys are needed.
 
 ```sh
-git clone https://github.com/christiantiquis/todo-list-react.git
+git clone https://github.com/candl-ph/todo-list-react.git
 cd todo-list-react
 npm ci --legacy-peer-deps
 npm run dev
@@ -168,9 +168,19 @@ production build as a completed lint check.
 
 The [deploy workflow](.github/workflows/nextjs.yml) starts automatically on
 pushes to **main**, and it can also be started manually from the repository's
-**Actions** tab. GitHub's runners compile the Next.js server. The self-hosted
-runner on homelab1 only loads that finished build into Docker and restarts the
-site.
+**Actions** tab with `main` selected. Other branches cannot deploy. Unit tests,
+typechecking, the build, and browser checks must pass on GitHub-hosted runners
+before the deployment build starts. Public pull-request checks also stay on
+GitHub-hosted runners.
+
+The `candl-ph` organization runner group `public-builds` compiles the deployment
+build and restarts the site on homelab1. Both jobs require the labels
+`self-hosted`, `Linux`, `X64`, `docker`, `homelab`, and `public-builds`.
+The group must allow this public repository. Eligible runners must share the
+homelab1 Docker daemon and host network so deployment and the localhost health
+check target the existing site. These runners have production Docker access;
+keep untrusted pull-request code on GitHub-hosted runners. Deployments run
+serially without cancelling an in-progress deployment.
 
 The container publishes host port **7200**. On homelab1 the site is
 `http://127.0.0.1:7200/`.
@@ -324,7 +334,7 @@ Zod · date-fns · Sonner · Lucide
 ## Contributing
 
 Bug reports and focused improvements are welcome through
-[issues](https://github.com/christiantiquis/todo-list-react/issues) and pull requests.
+[issues](https://github.com/candl-ph/todo-list-react/issues) and pull requests.
 Include reproduction steps for bugs and run the relevant checks before submitting
 a change. Use sample task data and exclude personal backups from contributions.
 
